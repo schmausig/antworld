@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
-import itertools
-from helperfuns import *
-import networkx as nx
 import math
-
+from ast import literal_eval
+import itertools
 
 from AntNode import AntNode, AntHQ
 from AntEdge import AntEdge
@@ -16,25 +14,32 @@ class AG():
 
 class AntGraph():
 
-	def __init__(self, G=None, show=False, name=None):
+	def __init__(self, name=None):
 		self.node = dict()		#dict with keys=nodeposition vals=AntNode
 		self.adj  = dict()
 		self.name = name
 		self.ants = set()
 		self.time = 0
+		self.foodmax = 0
+		self.foodsum = 0
+		self.finished = False
 	
-	def add_node(self, pos, antnode):
+	def add_node(self, pos, foodcount=0, flag=None):
 		if pos not in self:
-			if type(antnode).__name__ == 'AntHQ':
+			if flag == 'hq':
+				antnode = AntHQ(collected=foodcount)
 				self.hq = pos
+			else:
+				antnode = AntNode(foodcount=foodcount)
 			self.node[pos] = antnode
 			self.adj[pos] = dict()
+			self.foodmax = max(self.foodmax, foodcount)
+			self.foodsum += foodcount
 		else:
 			print('There is already a node at pos '+str(pos))
 			
-	def add_edge(self, pos1, pos2, antedge=None, shutup=True):
-		if not antedge:
-			antedge = AntEdge()
+	def add_edge(self, pos1, pos2, shutup=True):
+		antedge = AntEdge()
 		if pos1 not in self:  
 			if not shutup: print('Add a node at pos '+str(pos1)+' first.')
 		elif pos2 not in self:  
@@ -88,7 +93,7 @@ class AntGraph():
 
 	#######what happens on a tic######
 	def tic(self):
-		if self.time<20:
+		if self.time<1:
 			self.spawn_ant(1)
 		for ant in self.ants:
 			ant.decide()
@@ -102,7 +107,63 @@ class AntGraph():
 		for ant in self.ants:
 			ant.move_on_tac()
 		self.time+=1/2
-		
+		if self.node[self.hq].collected == self.foodsum:
+			self.finished = True
+
+	#provide absolute pathes for these two
+	#this format is easier to customize since there is no editor yet
+	def read_from_file(self, path, encoding='utf-8'):
+		'''
+	
+		firstline: nodecount edgecount graphname
+		then: class position foodcount
+		nodes before edges and exactly 1 hq pls
+
+
+		5 4 Example
+		hq (0,0) 0
+		n (0,2) 30
+		n (0,1) 0
+		n (0,-1) 0
+		n (1,0) 0
+		e ((0,0),(0,1))
+		e ((0,0),(0,-1))
+		e ((0,0),(1,0))
+		e ((0,1),(0,2))
+		'''
+		file = open(path, 'r')
+		nodecount, edgecount, self.name = file.readline().split()
+		for x in range(int(nodecount)):
+			klass, pos, foodcount, *attr = file.readline().split()
+			pos = literal_eval(pos)
+			foodcount = int(foodcount)
+			if klass == 'hq':
+				self.add_node(pos, foodcount=foodcount, flag='hq')
+			elif klass == 'n':
+				self.add_node(pos, foodcount=foodcount)
+			else:
+				x-=1
+		for x in range(int(edgecount)):	
+			klass, pos, *attr = file.readline().split()
+			pos = literal_eval(pos)
+			if klass == 'e':
+				self.add_edge(*pos)
+			else:
+				x-=1
+
+	def write_to_file(self, path, encoding='utf-8'):
+		firstline = (len(self.node), len(list(self.edges())), self.name)
+		file = open(path, 'w')
+		file.write(' '.join(map(str, firstline))+'\n')
+		for node in self:
+			antnode = self.node[node]
+			if type(antnode).__name__ == 'AntHQ':
+				file.write(' '.join(('hq', str(node), str(antnode.collected)))+'\n')
+			else:
+				file.write(' '.join(('n', str(node), str(antnode.foodcount)))+'\n')
+		for edge in self.edges():
+			file.write(' '.join(('e', str(edge)))+'\n')
+		file.close()
 
 
 
@@ -110,16 +171,15 @@ class AntGraph():
 
 
 
-
-
-def gen(w=11,h=11):
-	G = AntGraph(name=str(w)+'x'+str(h))
-	for pos in itertools.product(range(w),range(h)):
-		if pos == (math.floor(w/2),math.floor(h/2)):
-			antnode = AntHQ()
+def gen(w=range(-2,3),h=range(-2,3)):
+	G = AntGraph(name=str(len(w))+'x'+str(len(h)))
+	for pos in itertools.product(w,h):
+		if pos == (0,0):
+			G.add_node(pos, flag='hq')
 		else:
-			antnode = AntNode()
-		G.add_node(pos, antnode)
+			G.add_node(pos)
+	
+		
 
 	for node in G:		
 		i, j = node
@@ -128,19 +188,18 @@ def gen(w=11,h=11):
 		G.add_edge((i,j),(i,j-1))
 		G.add_edge((i,j),(i,j+1))
 	
-	G.node[(9,8)].foodcount = 20
-
 	return G
 
 def gen2():
-	G = AntGraph()
+	G = AntGraph(name='Custom')
 	nodes = [(0,2),(-1,1),(0,1),(1,1),(-1,0),(0,0),(1,0),(2,0),(3,0),(4,0),(5,0),(1,-1),(2,-1),(1,-2)]
 	for pos in nodes:
-		if pos == (1,0):
-			antnode = AntHQ()
+		pos = (pos[0]-1,pos[1])
+		if pos == (0,0):
+			G.add_node(pos, flag='hq')
 		else:
-			antnode = AntNode()
-		G.add_node(pos, antnode)
+			G.add_node(pos)
+		
 
 	for node in G:		
 		i, j = node
@@ -149,11 +208,8 @@ def gen2():
 		G.add_edge((i,j),(i,j-1))
 		G.add_edge((i,j),(i,j+1))
 
-	G.node[(5,0)].foodcount = 20
-	G.node[(-1,0)].foodcount = 20
-	G.node[(0,2)].foodcount = 30
-
 	return G
+
 
 
 
@@ -169,5 +225,5 @@ print(H[0][1].__class__)
 
 print('---------------')
 
-'''
 
+'''

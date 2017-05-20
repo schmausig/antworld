@@ -4,7 +4,7 @@ from numpy.random import choice
 
 class A():
 
-	RANDOM_FACTOR = 1/4 #this must be > 0
+	RANDOM_FACTOR = 1/4 #this must be > 0 to avoid division by zero and smaller for bigger 'alpha'
 	SEARCH_P_INT = 1/10 #intensity of search pheromone between 0 and 1
 	DELIVER_P_INT = 1/10	#intensity of deliver pheromone
 	
@@ -56,7 +56,7 @@ class Ant():
 		#this is kinda deterministic atm and at least laying down food should remain like that
 		antnode = self.AG.node[self.pos]
 		if antnode.foodcount > 0 and self.state == 'search':
-			if len(antnode.ants) < antnode.foodcount: #TODO better
+			if len(antnode.ants)-1 < antnode.foodcount: #TODO better
 				self.state = 'pickup'
 				return True
 		elif self.state == 'deliver' and type(antnode).__name__ == 'AntHQ' :
@@ -67,8 +67,9 @@ class Ant():
 	def use_phero(self, p_nr, intensity):
 		self.AG[self.pos[0]][self.pos[1]].increase_phero(p_nr, intensity)
 
-
 	def move_on_tic(self):
+		print(self.pos)
+		print(self.state)
 		if self.state == 'search':
 			self.AG.node[self.pos].ants.remove(self)
 			self.AG[self.pos][self.next].ants.add(self)
@@ -81,6 +82,9 @@ class Ant():
 			self.use_phero(p_nr=1, intensity = A.DELIVER_P_INT)
 		
 	def move_on_tac(self):
+		print(self.pos)
+		print(self.state)
+
 		if self.state == 'search' or self.state == 'deliver':
 			self.AG[self.pos[0]][self.pos[1]].ants.remove(self)
 			self.AG.node[self.pos[1]].ants.add(self)

@@ -1,3 +1,8 @@
+#built with
+python3/yakkety,now 3.5.1-4 amd64 [installed]
+python3-cairo/yakkety,now 1.10.0+dfsg-5build1 amd64 [installed]
+python3-gi/yakkety,now 3.22.0-1 amd64 [installed]
+
 execute AntView.py 
 
 scroll with

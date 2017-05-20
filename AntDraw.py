@@ -15,7 +15,7 @@ class AV:
 	#pipewidth + #pheromones*max_pline_width should be smaller than NSIZE
 	SPACING = ANTSIZE/8
 	PIPEWIDTH = ANTSIZE + SPACING
-	PLINE_WIDTH = NSIZE/10
+	PLINE_WIDTH = NSIZE/6
 	
 class AntDraw(Gtk.DrawingArea):
 
@@ -27,10 +27,9 @@ class AntDraw(Gtk.DrawingArea):
 		self.connect('draw', self.on_draw)
 		self.connect('realize', self.on_realize)
 		self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
-		self.connect('button-press-event', self.select)   #atm this is connected to simply making a timestep aka AG.tick()
+		self.connect('button-press-event', self.select)
 		self.connect('key-press-event', self.on_key_event)
-		
-
+		self.text = True
 
 		self.AG = AG
 		#boundaries of the graph (xmax,ymax,xmin,ymin)
@@ -40,35 +39,22 @@ class AntDraw(Gtk.DrawingArea):
 								(self.AGbbox['ymax'] + self.AGbbox['ymin'])/2	)
 		self.AGwidth = self.AGbbox['xmax'] - self.AGbbox['xmin']
 		self.AGheight = self.AGbbox['ymax'] - self.AGbbox['ymin']
-		self.AGfoodmax = max(AG.node[node].foodcount for node in self.AG)
-		self.AGfoodsum = sum(AG.node[node].foodcount for node in self.AG)
 		self.selected = None
 
 			
-		self.set_size_request(500,400)
+		#self.set_size_request(500,400)
 		#self.center = (self.size[0]/2, self.size[1]/2)
 		#self.shift = (AV.SCALE * (-1) * self.AGbbox['xmin'] + AV.OFFSET, AV.SCALE * self.AGbbox['ymax'] + AV.OFFSET)
 		
-		'''
-		GTK recommands to overwrite all these:
-		get_request_mode_vfunc(): (optional) Return what Gtk::SizeRequestMode is preferred by the widget.
-		get_preferred_width_vfunc(): Calculate the minimum and natural width of the widget.
-		get_preferred_height_vfunc(): Calculate the minimum and natural height of the widget.
-		get_preferred_width_for_height_vfunc(): Calculate the minimum and natural width of the widget 4 a specified height.
-		get_preferred_height_for_width_vfunc(): Calculate the minimum and natural height of the widget 4 a specified width.
-		on_size_allocate(): Position the widget, given the height and width that it has actually been given.
-		on_realize(): Associate a Gdk::Window with the widget.
-		on_unrealize(): (optional) Break the association with the Gdk::Window.
-		on_map(): (optional)
-		on_unmap(): (optional)
-		on_draw(): Draw on the supplied Cairo::Context.
-		'''
+		
 	def on_realize(self, wid):
 		super().realize()
 		#cairo stuff
 		initial_scale = 100 #change this one
 		initial_font_size = initial_scale/10
-		
+
+		#self.set_preferred_width(initial_scale*self.AGwidth)	
+		#self.set_preferred_height(initial_scale*self.AGheight)
 		#self.mirror_y_axis = cairo.Matrix(xx = 1, yy = -1)
 		x0 = self.get_allocated_width()/2
 		y0 = self.get_allocated_height()/2
@@ -80,10 +66,29 @@ class AntDraw(Gtk.DrawingArea):
 
 
 	def on_draw(self, wid, cr):
+		cr.identity_matrix()
+		cr.set_font_matrix(cairo.Matrix(xx=12, yy=12))
+		
+		cr.rectangle(0, 0, self.get_allocated_width(), self.get_allocated_height())
+		cr.set_source_rgb(0, 0, 0)
+		cr.set_line_width(1)
+		cr.stroke_preserve()
+		cr.set_source_rgb(1, 1, 1)
+		cr.fill()
+
+		if self.text:
+			cr.set_source_rgb(0, 0, 0)
+			attr = ( 'Time: '+str(self.AG.time),'Antcount: '+str(len(self.AG.ants)), 'Foodsum: '+str(self.AG.foodsum),'Collected: '
+					+str(self.AG.node[self.AG.hq].collected))
+			for i in range(len(attr)):
+				xbearing, ybearing, width, height, xadvance, yadvance = cr.text_extents(attr[i])
+				cr.move_to(0, (i+1)*height )
+				cr.show_text(attr[i])
+		
+
 		cr.set_matrix(self.ctm)
 		cr.set_font_matrix(self.font_matrix)
-		cr.set_line_width(1)
-		
+				
 		#antgrid coords on nodes
 		ngrid = self.get_grid_points(width=(2/3)*AV.NSIZE, height=(2/3)*AV.NSIZE, spacing=AV.SPACING, itemsize=AV.ANTSIZE)
 		for node in self.AG: 
@@ -102,6 +107,7 @@ class AntDraw(Gtk.DrawingArea):
 		#for node in [(0,0),(0,1),(1,0)]:
 		#for edge in [((0,0),(0,1)),((0,0),(1,0))]:
 		#	self.draw_edge(edge, cr, vgrid, hgrid)
+		
 
 	
 	def draw_node(self, node, grid, cr):
@@ -121,7 +127,7 @@ class AntDraw(Gtk.DrawingArea):
 		
 		#draw the foodbar
 		if antnode.foodcount>0:
-			relval = antnode.foodcount/self.AGfoodmax
+			relval = antnode.foodcount/self.AG.foodmax
 			cr.set_source_rgb(*self.food_to_rgb(relval))
 			cr.rectangle(	x + AV.NSIZE/4,
 								y - AV.NSIZE/2,
@@ -134,7 +140,7 @@ class AntDraw(Gtk.DrawingArea):
 			cr.rectangle(x - AV.NSIZE/12 , y - AV.NSIZE/12,	AV.NSIZE/6, AV.NSIZE/6);
 			cr.fill()
 			#draw collected food bar
-			relval = antnode.collected/self.AGfoodsum
+			relval = antnode.collected/self.AG.foodsum
 			cr.set_source_rgb(*self.food_to_rgb(relval))
 			cr.rectangle(	x + AV.NSIZE/4,
 								y - AV.NSIZE/2,

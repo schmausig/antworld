@@ -14,9 +14,9 @@ class AntNode():
 	
 class AntHQ(AntNode):
 
-	def __init__(self):
+	def __init__(self, collected=0):
 		super().__init__()
-		self.collected = 0
+		self.collected = collected
 			
 	def add_food(self, amount):
 		self.collected += amount
