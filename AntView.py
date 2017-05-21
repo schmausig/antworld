@@ -2,6 +2,7 @@
 
 import os
 import time, threading
+from multiprocessing import Process
 
 import gi
 gi.require_version('Gtk', '3.0')
@@ -9,7 +10,8 @@ from gi.repository import Gtk, Gdk
 import cairo
 
 from AntGraph import AntGraph, gen, gen2
-from AntDraw import AntDraw
+#from AntDraw import AntDraw
+from AntDarea import AntDarea
 import sys
 from helperfuns import *
 
@@ -27,18 +29,21 @@ class AntButtonBox(Gtk.ButtonBox):
 		super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
 		self.darea = darea
 		self.AG = darea.AG
+		self.AG.player.set_darea(darea)
 		
 		#buttons
 		self.reset = Gtk.ToolButton()
 		self.reset.set_stock_id('gtk-media-previous')
 		self.reset.connect('clicked', self.on_reset)
-
+		
 		self.slower = Gtk.ToolButton()
 		self.slower.set_stock_id('gtk-media-rewind')
 		self.slower.connect('clicked', self.on_slower)
+
 		self.playpause = Gtk.ToggleToolButton()
 		self.playpause.set_stock_id('gtk-media-play')
 		self.playpause.connect('toggled', self.on_playpause)
+
 		self.faster = Gtk.ToolButton()
 		self.faster.set_stock_id('gtk-media-forward')
 		self.faster.connect('clicked', self.on_faster)
@@ -49,69 +54,30 @@ class AntButtonBox(Gtk.ButtonBox):
 		self.add(self.playpause)
 		self.add(self.faster)
 		self.set_hexpand(True)
-		self.tictactime = 1/2
-		self.timer = threading.Thread(target=self.run)
-	
+				
 	def on_playpause(self, button):
 		if not self.AG.finished:
 			if button.get_active():
 				button.set_stock_id('gtk-media-pause')
-				self.timer.start()
+				self.AG.player.play()
 			else:
 				button.set_stock_id('gtk-media-play')		
-				self.timer = threading.Thread(target=self.run)
-
+				self.AG.player.pause()	
 	def on_faster(self, button):
-		self.tictactime = self.tictactime*(10/11)
+		self.AG.player.faster()
 
-	def on_slower(self,button):
-		self.tictactime = self.tictactime*(11/10)
-	
+	def on_slower(self,button):	
+		self.AG.player.slower()
+
 	def on_reset(self,button):
 		pass
 
 			
-	def run(self, animate=1, savetofile=0):
-		while self.playpause.get_active() and not self.AG.finished:
-			if savetofile >= 1/2:
-				ims = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.darea.get_allocated_width(), self.darea.get_allocated_height())
-				cr = cairo.Context(ims)
-				self.darea.on_draw(self, cr)
-				path = os.path.dirname(os.path.abspath(__file__))+os.sep+'log'+os.sep+self.AG.name+'_'+str(self.AG.time)+'png'
-				ims.write_to_png(path)
-
-			self.AG.tic()
-			if animate == 1/2:
-				self.darea.queue_draw()
-			'''
-			if savetofile == 1:
-				ims = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.darea.get_allocated_width(), self.darea.get_allocated_height())
-				cr = cairo.Context(ims)
-				self.darea.on_draw(self, cr)
-				path = os.path.dirname(os.path.abspath(__file__))+os.sep+'log'+os.sep+self.AG.name+'_'+str(self.AG.time)+'png'
-				ims.write_to_png(path)
-			'''
-
-			time.sleep(0.3*self.tictactime)
-			self.AG.tac()
-			if animate >= 1/2:
-				self.darea.queue_draw()
-			
-			time.sleep(0.7*self.tictactime)
-			if self.darea.AG.finished:
-				self.playpause.set_active(False)
-				self.playpause.set_stock_id('gtk-media-stop')
-				if savetofile >= 1/2:	
-					self.darea.on_draw(self, cr)
-					path = os.path.dirname(os.path.abspath(__file__))+os.sep+'log'+os.sep+self.AG.name+'_'+str(self.AG.time)+'png'
-					ims.write_to_png(path)
-
-
 class AntView(Gtk.Window):
 
 	def __init__(self, AG):
 		super().__init__()
-		self.darea = AntDraw(AG)
+		self.darea = AntDarea(AG)
 		self.antbuttonbox = AntButtonBox(self.darea)
 		self.scrollwin = Gtk.ScrolledWindow()
 		self.scrollwin.add_with_viewport(self.darea)
@@ -134,27 +100,39 @@ class AntView(Gtk.Window):
 		#self.maximize()
 
 		#self.set_position(Gtk.WindowPosition.CENTER)
-		self.set_redraw_on_allocate(False)
+		#self.set_redraw_on_allocate(False)
 		self.connect("delete-event", self.on_delete_event)
 		self.scrollwin.connect('key-press-event', self.darea.on_key_event)
 		
 		self.show_all()
 		
 	def on_delete_event(self, *args):
-		self.antbuttonbox.playpause.set_active(False)
+		self.darea.AG.player.stop()
 		Gtk.main_quit(args)
 
 def main():
-	AG = AntGraph()
-	#AG2 = gen2()
-	AG3 = gen(w=range(-5,6), h=range(-5,6))
-	#AG2.write_to_file(os.path.dirname(os.path.abspath(__file__))+os.sep+'worlds'+os.sep+AG2.name+'.antgraph')
-	AG3.write_to_file(os.path.dirname(os.path.abspath(__file__))+os.sep+'worlds'+os.sep+AG3.name+'.antgraph')
+	
+	#AG = gen({(3,3): 10}, w=range(-1,4), h=range(-1,4))
+	#AG = gen({(-5,-5): 20, (5,5) : 20}, w=range(-5,6), h=range(-5,6))
+	#AG = gen({(-10,-8): 20, (8,10) : 20, (9,7): 30}, w=range(-10,11), h=range(-10,11))
+	
+	#AG = gen({(9,9): 500}, w=range(-1,11), h=range(-1,11))
+	AG = gen({(5,5): 500, (2,2): 500}, w=range(-1,7), h=range(-1,7))
 
-	path = os.path.dirname(os.path.abspath(__file__))+os.sep+'worlds'+os.sep+'Example'+'.antgraph'
-	AG.read_from_file(path)
-	antview = AntView(AG)
-	Gtk.main()
+	
+	
+	#AG = AntGraph()
+	#path = os.path.dirname(os.path.abspath(__file__))+os.sep+'worlds'+os.sep+'standardsize'+'.antgraph'
+	#AG.read_from_file(path)
+	
+	#AG.write_to_file(os.path.dirname(os.path.abspath(__file__))+os.sep+'worlds'+os.sep+AG.name+'.antgraph')
+	#antview = AntView(AG)
+	#Gtk.main()
+	ims = cairo.ImageSurface(cairo.FORMAT_ARGB32, 800, 700)
+	AG.init_player()
+	AG.player.set_ims(ims)
+	AG.player.play()
+	AG.player.process.join()
 
 if __name__ == "__main__":    
 	main()

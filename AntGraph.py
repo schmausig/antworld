@@ -7,10 +7,12 @@ import itertools
 from AntNode import AntNode, AntHQ
 from AntEdge import AntEdge
 from Ant import Ant
+from AntPlayer import AntPlayer
+
 
 class AG():
 
-	VAPO_INT = 1/100
+	VAPO_INT = 1/250
 
 class AntGraph():
 
@@ -23,7 +25,10 @@ class AntGraph():
 		self.foodmax = 0
 		self.foodsum = 0
 		self.finished = False
-	
+		
+	def init_player(self):
+		self.player = AntPlayer(self)
+
 	def add_node(self, pos, foodcount=0, flag=None):
 		if pos not in self:
 			if flag == 'hq':
@@ -92,9 +97,8 @@ class AntGraph():
 
 
 	#######what happens on a tic######
-	def tic(self):
-		if self.time<1:
-			self.spawn_ant(1)
+	def tic(self, spawnants=0):
+		self.spawn_ant(spawnants)
 		for ant in self.ants:
 			ant.decide()
 		for ant in self.ants:
@@ -158,11 +162,11 @@ class AntGraph():
 		for node in self:
 			antnode = self.node[node]
 			if type(antnode).__name__ == 'AntHQ':
-				file.write(' '.join(('hq', str(node), str(antnode.collected)))+'\n')
+				file.write(' '.join(('hq', str(node).replace(' ',''), str(antnode.collected)))+'\n')
 			else:
-				file.write(' '.join(('n', str(node), str(antnode.foodcount)))+'\n')
+				file.write(' '.join(('n', str(node).replace(' ',''), str(antnode.foodcount)))+'\n')
 		for edge in self.edges():
-			file.write(' '.join(('e', str(edge)))+'\n')
+			file.write(' '.join(('e', str(edge).replace(' ','')))+'\n')
 		file.close()
 
 
@@ -171,14 +175,20 @@ class AntGraph():
 
 
 
-def gen(w=range(-2,3),h=range(-2,3)):
+def gen(foodplaces, w=range(-2,3),h=range(-2,3)):
 	G = AntGraph(name=str(len(w))+'x'+str(len(h)))
 	for pos in itertools.product(w,h):
-		if pos == (0,0):
-			G.add_node(pos, flag='hq')
+		if pos in foodplaces:
+			if pos == (0,0):
+				G.add_node(pos, flag='hq', foodcount=foodplaces[pos])
+			else:
+				G.add_node(pos, foodcount=foodplaces[pos])
 		else:
-			G.add_node(pos)
-	
+			if pos == (0,0):
+				G.add_node(pos, flag='hq')
+			else:
+				G.add_node(pos)
+
 		
 
 	for node in G:		
@@ -191,15 +201,21 @@ def gen(w=range(-2,3),h=range(-2,3)):
 	return G
 
 def gen2():
+	foodplaces ={(5,0): 20, (0,2) : 20}	
 	G = AntGraph(name='Custom')
 	nodes = [(0,2),(-1,1),(0,1),(1,1),(-1,0),(0,0),(1,0),(2,0),(3,0),(4,0),(5,0),(1,-1),(2,-1),(1,-2)]
 	for pos in nodes:
-		pos = (pos[0]-1,pos[1])
-		if pos == (0,0):
-			G.add_node(pos, flag='hq')
+		if pos in foodplaces:
+			if pos == (-1,0):
+				G.add_node(pos, flag='hq', foodcount=foodplaces[pos])
+			else:
+				G.add_node(pos, foodcount=foodplaces[pos])
 		else:
-			G.add_node(pos)
-		
+			if pos == (-1,0):
+				G.add_node(pos, flag='hq')
+			else:
+				G.add_node(pos)
+	
 
 	for node in G:		
 		i, j = node

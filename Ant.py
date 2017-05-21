@@ -4,9 +4,9 @@ from numpy.random import choice
 
 class A():
 
-	RANDOM_FACTOR = 1/4 #this must be > 0 to avoid division by zero and smaller for bigger 'alpha'
-	SEARCH_P_INT = 1/10 #intensity of search pheromone between 0 and 1
-	DELIVER_P_INT = 1/10	#intensity of deliver pheromone
+	RANDOM_FACTOR = 1/10 #this must be > 0 to avoid division by zero and smaller for bigger 'alpha'
+	SEARCH_P_INT = 1/50 #intensity of search pheromone between 0 and 1
+	DELIVER_P_INT = 1/50	#intensity of deliver pheromone
 	
 class Ant():
 
@@ -68,8 +68,8 @@ class Ant():
 		self.AG[self.pos[0]][self.pos[1]].increase_phero(p_nr, intensity)
 
 	def move_on_tic(self):
-		print(self.pos)
-		print(self.state)
+		#print(self.pos)
+		#print(self.state)
 		if self.state == 'search':
 			self.AG.node[self.pos].ants.remove(self)
 			self.AG[self.pos][self.next].ants.add(self)
@@ -82,8 +82,8 @@ class Ant():
 			self.use_phero(p_nr=1, intensity = A.DELIVER_P_INT)
 		
 	def move_on_tac(self):
-		print(self.pos)
-		print(self.state)
+		#print(self.pos)
+		#print(self.state)
 
 		if self.state == 'search' or self.state == 'deliver':
 			self.AG[self.pos[0]][self.pos[1]].ants.remove(self)
