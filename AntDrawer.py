@@ -4,16 +4,7 @@ import cairo
 import threading
 import math
 import copy
-
-class AD:
-	
-	NSIZE = 1/3
-	ANTSIZE = (2/3)*NSIZE/3 #so that 4x4 ants fit on a node
-
-	#pipewidth + #pheromones*max_pline_width should be smaller than NSIZE
-	SPACING = ANTSIZE/8
-	PIPEWIDTH = ANTSIZE + SPACING
-	PLINE_WIDTH = NSIZE/6
+from AntConstants import *
 
 class AntDrawer():
 	
@@ -32,10 +23,10 @@ class AntDrawer():
 		self.text = True
 		self.lock = threading.Lock()
 		
-		initial_scale = 70
-		text_offset = 150
+		initial_scale = 60
+		text_offset = 200
 		initial_font_size = initial_scale/10
-		self.ctm = cairo.Matrix(xx = initial_scale, yx = 0.0, xy = 0.0, yy = -initial_scale, x0=text_offset)
+		self.ctm = cairo.Matrix(xx = initial_scale, yx = 0.0, xy = 0.0, yy = -initial_scale, x0=text_offset+25)
 		self.ctm.translate(-self.AGbbox['xmin'], -self.AGbbox['ymax']-1)
 		self.font_matrix = cairo.Matrix(xx = initial_font_size/initial_scale, yy = -initial_font_size/initial_scale)
 
@@ -55,15 +46,34 @@ class AntDrawer():
 
 			cr.set_source_rgb(0, 0, 0)
 			attr = ( 'Time: '+str(self.AG.time),
-						'Antcount: '+str(len(self.AG.ants)),
+						'Antcount: '+str(len(self.AG.ants)),	
+						'Scoutantcount: '+str(len(self.AG.scoutants)),
 						'Foodsum: '+str(self.AG.foodsum),
-						'Collected: '+str(self.AG.node[self.AG.hq].collected))
-			
-			cr.rel_move_to(-150,0)
+						'Collected: '+str(self.AG.node[self.AG.hq].collected),
+						'',
+						'AG:',
+						'',
+						'VAPO_INT: '+str(AG.VAPO_INT),
+						'',
+						'A:',
+						'',
+						'RANDOM_FACTOR: '+str(A.RANDOM_FACTOR),
+						'SEARCH_P_INT: '+str(A.SEARCH_P_INT),
+						'DELIVER_P_INT: '+str(A.DELIVER_P_INT),
+						'',
+						'SA:',
+						'',
+						'RANDOM_FACTOR: '+str(SA.RANDOM_FACTOR),
+						'SEARCH_P_INT: '+str(SA.SEARCH_P_INT),
+						'DELIVER_P_INT: '+str(SA.DELIVER_P_INT))
+
+			cr.rel_move_to(-200,0)
 			for i in range(len(attr)):
 				xbearing, ybearing, width, height, xadvance, yadvance = cr.text_extents(attr[i])
 				cr.show_text(attr[i])
 				cr.rel_move_to(-xadvance, height+yadvance)
+				if attr[i] == '':
+					cr.rel_move_to(0,10)
 			cr.restore()
 
 		
@@ -84,10 +94,7 @@ class AntDrawer():
 		
 		for edge in self.AG.edges():
 			self.draw_edge(edge, cr, vgrid, hgrid)
-		#for node in [(0,0),(0,1),(1,0)]:
-		#[((0,0),(0,1)),((-1,0),(0,0)),((0,0),(1,0)),((0,1),(1,1)),((1,0),(1,1)),((-1,0),(0,0)),((-1,0),(0,0))]
-		#for edge in [((0,0),(0,1)),((0,0),(0,1))]:
-		#	self.draw_edge(edge, cr, vgrid, hgrid)
+	
 		self.lock.release()
 
 	
@@ -102,8 +109,9 @@ class AntDrawer():
 		cr.save()
 		cr.identity_matrix()
 		cr.set_line_width(1)
-		cr.set_line_join(cairo.LINE_JOIN_ROUND)
+		#cr.set_line_join(cairo.LINE_JOIN_ROUND) #NO EFFECT :(
 		#HQ stuff
+		cr.set_source_rgb(0, 0, 0)
 		if node == self.AG.hq:
 			cr.stroke_preserve()
 			cr.restore()
@@ -143,8 +151,9 @@ class AntDrawer():
 
 		x_anchor = x - AD.NSIZE/2
 		y_anchor = y - AD.NSIZE/6
-		antcount = len(self.AG.node[node].ants)
-		if antcount > grid[-1]:
+		antcount = len(antnode.ants)
+		scoutantcount = len(antnode.scoutants)
+		if antcount+scoutantcount > grid[-1]:
 			#draw antcount in the upper left corner		
 			xbearing, ybearing, width, height, xadvance, yadvance = cr.text_extents(str(antcount))
 			cr.move_to(	x - AD.NSIZE/2.2 + xbearing,
@@ -153,10 +162,18 @@ class AntDrawer():
 		else:
 			coords = grid[0]
 			for a in range(antcount):
+				cr.set_source_rgb(0, 0, 0)
 				cr.rectangle(	x_anchor + coords[a][0],
 									y_anchor + coords[a][1],
 									AD.ANTSIZE, AD.ANTSIZE)
 				cr.fill()
+			for s in range(antcount,antcount+scoutantcount):
+				cr.set_source_rgb(1, 0, 1)
+				cr.rectangle(	x_anchor + coords[s][0],
+									y_anchor + coords[s][1],
+									AD.ANTSIZE, AD.ANTSIZE)
+				cr.fill()
+
 		
 	def draw_edge(self, edge, cr, vgrid, hgrid):
 		node1, node2 = edge
@@ -295,7 +312,7 @@ class AntDrawer():
 	def translate(self, x, y):
 		self.lock.acquire()
 		self.ctm.translate(x,y)
-		self.lock.release()
+		self.lock.release()  #these locks dont help ;(
 
 	def scale(self, x, y):
 		self.lock.acquire()

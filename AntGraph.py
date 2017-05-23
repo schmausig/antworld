@@ -6,28 +6,31 @@ import itertools
 
 from AntNode import AntNode, AntHQ
 from AntEdge import AntEdge
-from Ant import Ant
+from Ant import Ant, ScoutAnt
 from AntPlayer import AntPlayer
-
-
-class AG():
-
-	VAPO_INT = 1/250
+from AntDrawer import AntDrawer
+from AntConstants import AG
 
 class AntGraph():
 
-	def __init__(self, name=None):
+	def __init__(self, name=None, path=None, darea=None, hq=None, foodplaces=None, x_range=None, y_range=None, gen=False):
 		self.node = dict()		#dict with keys=nodeposition vals=AntNode
 		self.adj  = dict()
 		self.name = name
 		self.ants = set()
+		self.scoutants = set()
 		self.time = 0
 		self.foodmax = 0
 		self.foodsum = 0
 		self.finished = False
-		
-	def init_player(self):
-		self.player = AntPlayer(self)
+		if path:
+			self.read_from_file(path)
+		if hq and foodplaces and x_range and y_range:
+			self.rectangle(hq, foodplaces, x_range, y_range)
+		if gen:
+			self.gen()
+		self.drawer = AntDrawer(self, darea=darea)
+		self.player = AntPlayer(self, darea=darea)
 
 	def add_node(self, pos, foodcount=0, flag=None):
 		if pos not in self:
@@ -86,10 +89,16 @@ class AntGraph():
 		del visited 
 	
 	#######happenings########
-	def spawn_ant(self, nr):
-		for i in range(nr):
+	def spawn_ant(self, amount):
+		for i in range(amount):
 			new_ant = Ant(self)
 			self.ants.add(new_ant)
+	
+	def spawn_scoutant(self, amount):
+		for i in range(amount):
+			new_ant = ScoutAnt(self)
+			self.scoutants.add(new_ant)
+
 	
 	def vaporize(self, intensity):
 		for antedge in self.edges(obj=True):
@@ -97,10 +106,13 @@ class AntGraph():
 
 
 	#######what happens on a tic######
-	def tic(self, spawnants=0):
-		self.spawn_ant(spawnants)
+	def tic(self):
+		for ant in self.scoutants:
+			ant.decide()
 		for ant in self.ants:
 			ant.decide()
+		for ant in self.scoutants:
+			ant.move_on_tic()
 		for ant in self.ants:
 			ant.move_on_tic()
 		self.time+=1/2
@@ -108,6 +120,8 @@ class AntGraph():
 	#######what happens on a tac######
 	def tac(self):
 		self.vaporize(AG.VAPO_INT)
+		for ant in self.scoutants:
+			ant.move_on_tac()
 		for ant in self.ants:
 			ant.move_on_tac()
 		self.time+=1/2
@@ -120,8 +134,10 @@ class AntGraph():
 		'''
 	
 		firstline: nodecount edgecount graphname
-		then: class position foodcount
+		then:		n/hq position foodcount
+					e position phero
 		nodes before edges and exactly 1 hq pls
+		no space in the tuples!
 
 
 		5 4 Example
@@ -130,7 +146,7 @@ class AntGraph():
 		n (0,1) 0
 		n (0,-1) 0
 		n (1,0) 0
-		e ((0,0),(0,1))
+		e ((0,0),(0,1)) (0.7,0.8)
 		e ((0,0),(0,-1))
 		e ((0,0),(1,0))
 		e ((0,1),(0,2))
@@ -149,9 +165,13 @@ class AntGraph():
 				x-=1
 		for x in range(int(edgecount)):	
 			klass, pos, *attr = file.readline().split()
+		
 			pos = literal_eval(pos)
 			if klass == 'e':
 				self.add_edge(*pos)
+				if attr:
+					p = list(literal_eval(attr[0]))
+					self[pos[0]][pos[1]].p = p
 			else:
 				x-=1
 
@@ -169,62 +189,49 @@ class AntGraph():
 			file.write(' '.join(('e', str(edge).replace(' ','')))+'\n')
 		file.close()
 
-
-
-
-
-
-
-def gen(foodplaces, w=range(-2,3),h=range(-2,3)):
-	G = AntGraph(name=str(len(w))+'x'+str(len(h)))
-	for pos in itertools.product(w,h):
-		if pos in foodplaces:
-			if pos == (0,0):
-				G.add_node(pos, flag='hq', foodcount=foodplaces[pos])
+	def rectangle(self, hq, foodplaces, x_range, y_range):
+		self.name=str(len(x_range))+'x'+str(len(y_range))
+		for pos in itertools.product(x_range, y_range):
+			if pos in foodplaces:
+				if pos == hq:
+					self.add_node(pos, flag='hq', foodcount=foodplaces[pos])
+				else:
+					self.add_node(pos, foodcount=foodplaces[pos])
 			else:
-				G.add_node(pos, foodcount=foodplaces[pos])
-		else:
-			if pos == (0,0):
-				G.add_node(pos, flag='hq')
-			else:
-				G.add_node(pos)
+				if pos == (0,0):
+					self.add_node(pos, flag='hq')
+				else:
+					self.add_node(pos)
 
+		for node in self:		
+			i, j = node
+			self.add_edge((i,j),(i-1,j))
+			self.add_edge((i,j),(i+1,j))
+			self.add_edge((i,j),(i,j-1))
+			self.add_edge((i,j),(i,j+1))
+
+	def gen(self):
+		foodplaces = {(5,0): 20, (0,2) : 20}	
+		self.name = 'maze'
+		nodes = [(0,2),(-1,1),(0,1),(1,1),(-1,0),(0,0),(1,0),(2,0),(3,0),(4,0),(5,0),(1,-1),(2,-1),(1,-2),(-2,0),(-3,1),(-3,2),(-3,3),(-3,4),(-2,4),(-1,4),(0,4),(0,3),(5,-1),(5,-2),(5,-3),(5,-4),(4,-3),(3,-3),(2,-3),(2,-2),(1,-3),(3,-1),(3,-2),(4,-2)]
+		for pos in nodes:
+			if pos in foodplaces:
+				if pos == (-1,0):
+					self.add_node(pos, flag='hq', foodcount=foodplaces[pos])
+				else:
+					self.add_node(pos, foodcount=foodplaces[pos])
+			else:
+				if pos == (-1,0):
+					self.add_node(pos, flag='hq')
+				else:
+					self.add_node(pos)
 		
-
-	for node in G:		
-		i, j = node
-		G.add_edge((i,j),(i-1,j))
-		G.add_edge((i,j),(i+1,j))
-		G.add_edge((i,j),(i,j-1))
-		G.add_edge((i,j),(i,j+1))
-	
-	return G
-
-def gen2():
-	foodplaces ={(5,0): 20, (0,2) : 20}	
-	G = AntGraph(name='Custom')
-	nodes = [(0,2),(-1,1),(0,1),(1,1),(-1,0),(0,0),(1,0),(2,0),(3,0),(4,0),(5,0),(1,-1),(2,-1),(1,-2)]
-	for pos in nodes:
-		if pos in foodplaces:
-			if pos == (-1,0):
-				G.add_node(pos, flag='hq', foodcount=foodplaces[pos])
-			else:
-				G.add_node(pos, foodcount=foodplaces[pos])
-		else:
-			if pos == (-1,0):
-				G.add_node(pos, flag='hq')
-			else:
-				G.add_node(pos)
-	
-
-	for node in G:		
-		i, j = node
-		G.add_edge((i,j),(i-1,j))
-		G.add_edge((i,j),(i+1,j))
-		G.add_edge((i,j),(i,j-1))
-		G.add_edge((i,j),(i,j+1))
-
-	return G
+		for node in self:		
+			i, j = node
+			self.add_edge((i,j),(i-1,j))
+			self.add_edge((i,j),(i+1,j))
+			self.add_edge((i,j),(i,j-1))
+			self.add_edge((i,j),(i,j+1))
 
 
 

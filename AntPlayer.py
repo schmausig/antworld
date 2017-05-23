@@ -5,35 +5,39 @@ from multiprocessing import Process
 import time
 import cairo
 import os
-from AntDrawer import AntDrawer
+from AntConstants import RC
 
 class AntPlayer():
 
-	def __init__(self, AG):
+	def __init__(self, AG, darea=None):
 		self.process = threading.Thread(target=self.run, daemon=True)
 		self.AG = AG
 		self.tictactime = 1/2	
 		self.playing = False
-		self.darea = None
-		self.drawer = AntDrawer(AG)
-
-	def set_darea(self, darea):
 		self.darea = darea
-	
-	def set_ims(self, ims):
-		self.ims = ims
-	
+		self.ims = None
+		self.drawer = AG.drawer
+		self.animate = True
+
+	def set_ims(self):
+		self.ims = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.darea.get_allocated_width(), self.darea.get_allocated_height())	
+		#self.ims = cairo.ImageSurface(cairo.FORMAT_ARGB32, (self.darea.drawer.AGwidth+2)*60+150, (self.darea.drawer.AGheight+2)*60)
+	def unset_ims(self):
+		self.ims = None
+			
 	def play(self, *kwargs):
 		print('play')
 		self.playing = True
 		self.process.start()
-			
-	def run(self, animate_mod=1, saveimg_mod=20, spawn_mod=2, spawn_amount=4, spawn_until=20, until=100000):
+
+	#important: KEYWORDS IN THIS FUNCTION CONTROL THE SPAWNING AND DRAWING OUTPUT BEHAVIOUR
+	def run(self, until=100000):
 		while self.playing and threading.main_thread().is_alive() and self.AG.time<until:
-			if self.ims and self.AG.time % saveimg_mod == 0:
+			print(self.AG.time)
+			if self.ims and (self.AG.time % RC.saveimg_mod == 0 or self.AG.finished):
 				cr = cairo.Context(self.ims)
 				self.drawer.draw(self, cr)
-				path = os.path.dirname(os.path.abspath(__file__))+os.sep+'log'+os.sep+self.AG.name+'_'+str(self.AG.time)+'png'
+				path = os.path.dirname(os.path.abspath(__file__))+os.sep+'log'+os.sep+self.AG.name+'_'+str(int(self.AG.time))+'.png'
 				self.ims.write_to_png(path)
 
 			if self.AG.finished:
@@ -42,13 +46,14 @@ class AntPlayer():
 				#self.playpause.set_stock_id('gtk-media-stop')
 				break
 
-			#spawning behavior
-			if spawn_until > self.AG.time and self.AG.time % spawn_mod == 0:
-				ants = spawn_amount
-			else:
-				ants = 0
-			self.AG.tic(spawnants=ants)
-			if self.darea and self.AG.time % animate_mod == 0:
+			#spawning
+			if RC.spawn_from <= self.AG.time and self.AG.time <= RC.spawn_until and self.AG.time % RC.spawn_mod == 0:
+				self.AG.spawn_ant(RC.spawn_amount)
+			if RC.sspawn_from <= self.AG.time and self.AG.time <= RC.sspawn_until and self.AG.time % RC.sspawn_mod == 0:
+				self.AG.spawn_scoutant(RC.sspawn_amount)
+			
+			self.AG.tic()
+			if self.animate and self.AG.time % RC.animate_mod == 0:
 				self.darea.queue_draw()
 
 			'''
@@ -60,13 +65,13 @@ class AntPlayer():
 				ims.write_to_png(path)
 			'''
 
-			if self.darea:
+			if self.animate:
 				time.sleep(0.3*self.tictactime)
-			self.AG.tac()
 			
-			if self.darea and self.AG.time % animate_mod == 0:
+			self.AG.tac()
+			if self.animate and self.AG.time % RC.animate_mod == 0:
 				self.darea.queue_draw()
-			if self.darea:
+			if self.animate:
 				time.sleep(0.7*self.tictactime)
 		
 	def pause(self):

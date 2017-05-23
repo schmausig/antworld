@@ -5,6 +5,7 @@ class AntNode():
 	def __init__(self, foodcount=0):		
 		self.foodcount = foodcount
 		self.ants = set()
+		self.scoutants = set()
 		
 	def get_food(self):
 		if self.foodcount > 0:

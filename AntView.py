@@ -8,13 +8,12 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 import cairo
+from AntButtonBox import AntButtonBox
 
-from AntGraph import AntGraph, gen, gen2
-#from AntDraw import AntDraw
+from AntGraph import AntGraph
 from AntDarea import AntDarea
 import sys
 from helperfuns import *
-
 
 class AntListBox(Gtk.ListBox):
 
@@ -23,62 +22,18 @@ class AntListBox(Gtk.ListBox):
 		self.darea = darea
 
 
-class AntButtonBox(Gtk.ButtonBox):
-
-	def __init__(self, darea):
-		super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-		self.darea = darea
-		self.AG = darea.AG
-		self.AG.player.set_darea(darea)
-		
-		#buttons
-		self.reset = Gtk.ToolButton()
-		self.reset.set_stock_id('gtk-media-previous')
-		self.reset.connect('clicked', self.on_reset)
-		
-		self.slower = Gtk.ToolButton()
-		self.slower.set_stock_id('gtk-media-rewind')
-		self.slower.connect('clicked', self.on_slower)
-
-		self.playpause = Gtk.ToggleToolButton()
-		self.playpause.set_stock_id('gtk-media-play')
-		self.playpause.connect('toggled', self.on_playpause)
-
-		self.faster = Gtk.ToolButton()
-		self.faster.set_stock_id('gtk-media-forward')
-		self.faster.connect('clicked', self.on_faster)
-		
-		self.set_layout(Gtk.ButtonBoxStyle.CENTER)
-		self.add(self.reset)
-		self.add(self.slower)
-		self.add(self.playpause)
-		self.add(self.faster)
-		self.set_hexpand(True)
-				
-	def on_playpause(self, button):
-		if not self.AG.finished:
-			if button.get_active():
-				button.set_stock_id('gtk-media-pause')
-				self.AG.player.play()
-			else:
-				button.set_stock_id('gtk-media-play')		
-				self.AG.player.pause()	
-	def on_faster(self, button):
-		self.AG.player.faster()
-
-	def on_slower(self,button):	
-		self.AG.player.slower()
-
-	def on_reset(self,button):
-		pass
-
-			
 class AntView(Gtk.Window):
 
-	def __init__(self, AG):
+	def __init__(self):
 		super().__init__()
-		self.darea = AntDarea(AG)
-		self.antbuttonbox = AntButtonBox(self.darea)
+		self.darea = AntDarea(self)
+
+		path = get_worlds_dir()+'12x12_maze'+'.antgraph'
+		self.AG = AntGraph(path=path, darea=self.darea)
+		#self.AG = AntGraph(darea=self.darea, hq=None, foodplaces=None, x_range=None, y_range=None, gen=True) 
+	#	self.AG = AntGraph(darea=self.darea, hq=(0,0), foodplaces={(5,5) : 300, (-5,5) : 300, (0,-5) : 200}, x_range=range(-5,7), y_range=range(-5,7)) 
+		
+		self.antbuttonbox = AntButtonBox(self)
 		self.scrollwin = Gtk.ScrolledWindow()
 		self.scrollwin.add_with_viewport(self.darea)
 		self.scrollwin.set_vexpand(True)
@@ -89,25 +44,82 @@ class AntView(Gtk.Window):
 		self.grid = Gtk.Grid()
 		self.grid.set_vexpand(True)
 		self.grid.set_hexpand(True)
-		self.grid.attach(self.antlistbox, 0, 0, 1, 1)
-		self.grid.attach(self.scrollwin, 1, 0, 1, 1)
-		self.grid.attach(self.antbuttonbox, 1, 1, 1, 1)
-		self.add(self.grid)
+		self.grid.attach(self.antlistbox, 0, 1, 1, 1)
+		self.grid.attach(self.scrollwin, 1, 1, 1, 1)
+		self.grid.attach(self.antbuttonbox, 1, 2, 1, 1)
 
-		#self.override_background_color(Gtk.StateType.NORMAL, Gdk.RGBA(1.,1.,1.,1.))
+		self.init_menubar()
+
 		self.set_title("AntView")
-		self.set_default_size(800, 700)
+		self.set_default_size(920, 680)
 		#self.maximize()
 
 		#self.set_position(Gtk.WindowPosition.CENTER)
-		#self.set_redraw_on_allocate(False)
+		self.set_redraw_on_allocate(False)
 		self.connect("delete-event", self.on_delete_event)
 		self.scrollwin.connect('key-press-event', self.darea.on_key_event)
 		
-		self.show_all()
 		
+		self.add(self.grid)
+		self.show_all()
+
+	def init_menubar(self):
+		action_group = Gtk.ActionGroup("my_actions")
+		
+		#self.add_file_menu_actions(action_group)
+		#self.add_edit_menu_actions(action_group)
+		
+	
+		menubar = Gtk.MenuBar()
+
+		#the filemenu
+		filemenu = Gtk.MenuItem("File")
+		filem = Gtk.Menu()
+		filemenu.set_submenu(filem)
+		fileopen = Gtk.MenuItem("Open File")
+		fileopen.connect("activate", self.on_filemenu_open)
+		filesave = Gtk.MenuItem("Save File")
+		filesave.connect("activate", self.on_filemenu_save)
+
+		filequit = Gtk.MenuItem("Quit")
+		filequit.connect("activate", self.on_delete_event)
+
+		filem.append(fileopen)
+		filem.append(filesave)
+		filem.append(Gtk.SeparatorMenuItem())
+		filem.append(filequit)
+		
+		menubar.append(filemenu)
+		#menubar.pack_start(menub, True, True, 1)
+		self.grid.attach(menubar, 0, 0, 2, 1)
+		
+	def on_filemenu_open(self, widget):
+		fcd = Gtk.FileChooserDialog(Gtk.FileChooserAction.OPEN)
+		fcd.add_button("Open", Gtk.ResponseType.OK)
+		fcd.set_current_folder(get_worlds_dir())
+
+		response = fcd.run()
+		if response == Gtk.ResponseType.OK:
+			filename = fcd.get_filename()
+			self.AG = AntGraph(path=filename, darea=self.darea)
+			self.darea.connect("draw", self.AG.drawer.draw)
+			self.darea.queue_draw()
+		fcd.destroy()
+
+	def on_filemenu_save(self, widget):
+		fsd = Gtk.FileChooserDialog("Save File", self, Gtk.FileChooserAction.SAVE)
+		fsd.add_button("Save", Gtk.ResponseType.OK)
+		fsd.set_current_folder(get_worlds_dir())
+		fsd.set_current_name(self.AG.name+'.antgraph')
+		response = fsd.run()
+		if response == Gtk.ResponseType.OK:
+			filename = fsd.get_filename()
+			self.AG.write_to_file(filename)
+		fsd.destroy()
+
+	
 	def on_delete_event(self, *args):
-		self.darea.AG.player.stop()
+		self.AG.player.stop()
 		Gtk.main_quit(args)
 
 def main():
@@ -117,22 +129,20 @@ def main():
 	#AG = gen({(-10,-8): 20, (8,10) : 20, (9,7): 30}, w=range(-10,11), h=range(-10,11))
 	
 	#AG = gen({(9,9): 500}, w=range(-1,11), h=range(-1,11))
-	AG = gen({(5,5): 500, (2,2): 500}, w=range(-1,7), h=range(-1,7))
+	#AG = gen({(5,5): 400}, w=range(-1,7), h=range(-1,7))
 
 	
-	
-	#AG = AntGraph()
-	#path = os.path.dirname(os.path.abspath(__file__))+os.sep+'worlds'+os.sep+'standardsize'+'.antgraph'
-	#AG.read_from_file(path)
-	
+			
 	#AG.write_to_file(os.path.dirname(os.path.abspath(__file__))+os.sep+'worlds'+os.sep+AG.name+'.antgraph')
-	#antview = AntView(AG)
-	#Gtk.main()
-	ims = cairo.ImageSurface(cairo.FORMAT_ARGB32, 800, 700)
-	AG.init_player()
-	AG.player.set_ims(ims)
-	AG.player.play()
-	AG.player.process.join()
+	antview = AntView()
+	
+	Gtk.main()
+	#ims = cairo.ImageSurface(cairo.FORMAT_ARGB32, (antview.darea.drawer.AGwidth+2)*60+150, (antview.darea.drawer.AGheight+2)*60)
+
+	#AG.init_player()
+	#AG.player.set_ims(ims)
+	#AG.player.play()
+	#AG.player.process.join()
 
 if __name__ == "__main__":    
 	main()

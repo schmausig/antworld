@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 
 from numpy.random import choice
+from AntConstants import A, SA
 
-class A():
-
-	RANDOM_FACTOR = 1/10 #this must be > 0 to avoid division by zero and smaller for bigger 'alpha'
-	SEARCH_P_INT = 1/50 #intensity of search pheromone between 0 and 1
-	DELIVER_P_INT = 1/50	#intensity of deliver pheromone
-	
 class Ant():
 
 	def __init__(self, AG, pos=None):
@@ -30,9 +25,9 @@ class Ant():
 		except:
 			pass
 		
-		antnode = self.AG.node[self.pos] 
-		#and the current one if the ant is searching and the node has food or if its delivering and node=HQ
+		#stay on current node if the ant is searching and the node has food or if its delivering and node=HQ
 		if not self.decide_to_stay():
+			#else decide next node
 			neighbors = list(self.AG[self.pos].keys())	
 			weights = []
 			if self.state == 'search':
@@ -68,8 +63,6 @@ class Ant():
 		self.AG[self.pos[0]][self.pos[1]].increase_phero(p_nr, intensity)
 
 	def move_on_tic(self):
-		#print(self.pos)
-		#print(self.state)
 		if self.state == 'search':
 			self.AG.node[self.pos].ants.remove(self)
 			self.AG[self.pos][self.next].ants.add(self)
@@ -82,9 +75,6 @@ class Ant():
 			self.use_phero(p_nr=1, intensity = A.DELIVER_P_INT)
 		
 	def move_on_tac(self):
-		#print(self.pos)
-		#print(self.state)
-
 		if self.state == 'search' or self.state == 'deliver':
 			self.AG[self.pos[0]][self.pos[1]].ants.remove(self)
 			self.AG.node[self.pos[1]].ants.add(self)
@@ -103,6 +93,108 @@ class Ant():
 			self.state = 'search'
 			self.last = self.pos
 
-				
 
 
+
+class ScoutAnt(Ant):
+
+	def __init__(self, AG, pos=None):
+		self.AG = AG
+		if not pos: 
+			self.pos = AG.hq
+			AG.node[AG.hq].scoutants.add(self)
+		else:
+			self.pos = pos
+			AG.node[pos].scoutants.add(self)
+		self.last = None #last node
+		self.next = None #next node
+		self.state = 'search'
+		
+		self.afternext = None
+		self.nextstate = None
+			
+	def decide(self):
+
+		try:
+			if len(self.pos[0])==2:
+				print(self,' can only decide on nodes')
+		except:
+			pass
+			
+		#DECIDE NEXT
+		neighbors = list(self.AG[self.pos].keys())	
+		weights = []
+		if self.state == 'search':
+			for neighbor in neighbors:
+				if neighbor == self.last:
+					weights.append(SA.RANDOM_FACTOR)
+				else:
+					weights.append(self.AG[self.pos][neighbor].p[1] + SA.RANDOM_FACTOR)
+		elif self.state == 'gohome':
+			for neighbor in neighbors:
+				if neighbor == self.last:
+					weights.append(SA.RANDOM_FACTOR)
+				else:
+					weights.append(self.AG[self.pos][neighbor].p[0] + SA.RANDOM_FACTOR)
+		wsum = sum(weights)
+		probs = [weight/wsum for weight in weights]
+		self.next = neighbors[choice(range(len(neighbors)), 1, p=probs)[0]]
+		
+		#change the state before afternext decision
+		if self.next == self.AG.hq:
+			self.nextstate = 'search'
+		elif self.AG.node[self.next].foodcount > 0:
+			self.nextstate = 'gohome'
+		else:
+			self.nextstate = self.state
+
+		#DECIDE AFTERNEXT
+		neighbors = list(self.AG[self.next].keys())	
+		weights = []
+		if self.nextstate == 'search':
+			for neighbor in neighbors:
+				if neighbor == self.pos:
+					weights.append(SA.RANDOM_FACTOR)
+				else:
+					weights.append(self.AG[self.next][neighbor].p[1] + SA.RANDOM_FACTOR)
+		elif self.nextstate == 'gohome':
+			for neighbor in neighbors:
+				if neighbor == self.pos:
+					weights.append(SA.RANDOM_FACTOR)
+				else:
+					weights.append(self.AG[self.next][neighbor].p[0] + SA.RANDOM_FACTOR)
+		wsum = sum(weights)
+		probs = [weight/wsum for weight in weights]
+		self.overnext = neighbors[choice(range(len(neighbors)), 1, p=probs)[0]]
+
+	def use_phero(self, p_nr, intensity):
+		self.AG[self.last][self.pos].increase_phero(p_nr, intensity)
+
+	def move_on_tic(self):
+		self.AG.node[self.pos].scoutants.remove(self)
+		self.AG.node[self.next].scoutants.add(self)
+		self.last = self.pos
+		self.pos = self.next
+		#always use_phero after the ant physically moved to the other set and self.last, self.pos are updated
+		if self.state == 'search':
+			self.use_phero(p_nr=0, intensity=SA.SEARCH_P_INT)
+		elif self.state == 'gohome':
+			self.use_phero(p_nr=1, intensity=SA.DELIVER_P_INT)
+		self.state = self.nextstate
+		self.nextstate = None
+
+	def move_on_tac(self):
+		self.AG.node[self.pos].scoutants.remove(self)
+		self.AG.node[self.overnext].scoutants.add(self)
+		self.last = self.pos
+		self.pos = self.overnext
+		#always use_phero after the ant physically moved to the other set and self.last, self.pos are updated
+		if self.state == 'search':
+			self.use_phero(p_nr=0, intensity=SA.SEARCH_P_INT)
+		elif self.state == 'gohome':
+			self.use_phero(p_nr=1, intensity=SA.DELIVER_P_INT)
+
+		if self.pos == self.AG.hq:
+			self.state = 'search'
+		elif self.AG.node[self.pos].foodcount > 0:
+			self.state = 'gohome'

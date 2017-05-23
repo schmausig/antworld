@@ -5,6 +5,7 @@ class AntEdge():
 	def __init__(self):
 		self.p = [0,0]
 		self.ants = set()
+		self.scoutants = set()
 	
 	def vaporize(self, intensity):
 		for p_nr in range(len(self.p)):
